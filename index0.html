@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveABC英文雜誌 單字複習與測驗</title>
+    <!-- 引入獨立的 CSS 樣式檔 -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>📚 LiveABC英文雜誌 單字複習與測驗</h1>
+
+    <!-- 導覽頁籤 -->
+    <div class="nav-tabs">
+        <button class="nav-btn active" onclick="switchTab('cards')">單字名片</button>
+        <button class="nav-btn" onclick="switchTab('quiz')">字彙測驗</button>
+        <button class="nav-btn" onclick="switchTab('mistakes')">錯題本 (<span id="mistakeCount">0</span>)</button>
+    </div>
+
+    <!-- 1. 單字名片區 -->
+    <div id="cards-section" class="section active">
+        <div class="controls">
+            <div>
+                <label>選擇單元：</label>
+                <select id="cardUnitSelect" onchange="renderCards()">
+                    <!-- <option value="all">總複習 (全部單元)</option> -->
+                    <option value="1">115年9月份</option>
+                    <!-- <option value="2">第二單元</option>
+                    <option value="3">第三單元</option>
+                    <option value="4">第四單元</option>
+                    <option value="5">第五單元</option> -->
+                </select>
+            </div>
+            <span id="cardCountInfo" style="font-size: 0.9rem; color: #6b7280;"></span>
+        </div>
+        <div class="card-grid" id="cardGrid"></div>
+    </div>
+
+    <!-- 2. 測驗區 -->
+    <div id="quiz-section" class="section">
+        <div class="controls">
+            <div>
+                <label>測驗範圍：</label>
+                <select id="quizUnitSelect">
+                    <!-- <option value="all">總複習 (全部單元)</option> -->
+                    <option value="1">115年9月份</option>
+                    <!-- <option value="2">第二單元</option>
+                    <option value="3">第三單元</option>
+                    <option value="4">第四單元</option>
+                    <option value="5">第五單元</option> -->
+                </select>
+            </div>
+            <div>
+                <label>題型：</label>
+                <select id="quizTypeSelect">
+                    <option value="en2ch">英選中</option>
+                    <option value="ch2en">中選英</option>
+                    <option value="spell">拼字填空</option>
+                </select>
+            </div>
+            <div>
+                <label>題數模式：</label>
+                <select id="quizCountSelect">
+                    <option value="10">10 題</option>
+                    <option value="all">全部隨機</option>
+                </select>
+            </div>
+            <button class="btn-primary" onclick="startQuiz()">開始測驗</button>
+        </div>
+
+        <div id="quizContainer" style="display: none;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-weight: 600; color: #4b5563;">
+                <span id="quizProgress">第 1 題 / 共 10 題</span>
+                <span id="quizScore">得分：0</span>
+            </div>
+            <div class="quiz-box">
+                <div class="quiz-question" id="quizQuestionText">Question</div>
+                
+                <!-- 選擇題選項 -->
+                <div id="choiceContainer" class="options-grid"></div>
+
+                <!-- 拼字題輸入框 -->
+                <div id="spellContainer" style="display: none;">
+                    <input type="text" id="spellInput" class="spell-input" placeholder="請輸入英文單字..." autocomplete="off">
+                    <button class="btn-primary" onclick="submitSpellAnswer()">送出答案</button>
+                </div>
+
+                <div class="feedback" id="quizFeedback"></div>
+            </div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button id="nextBtn" class="btn-primary" style="display: none;" onclick="nextQuestion()">下一題</button>
+            </div>
+        </div>
+
+        <div id="quizStartPrompt" style="text-align: center; padding: 40px; color: #6b7280;">
+            請設定上方範圍、題型與題數，並點擊「開始測驗」！
+        </div>
+    </div>
+
+    <!-- 3. 錯題本區 -->
+    <div id="mistakes-section" class="section">
+        <div class="controls">
+            <span>紀錄您在測驗中答錯的單字與時間</span>
+            <button onclick="clearMistakes()" style="background: #fee2e2; color: #991b1b; border: 1px solid #f87171; border-radius: 6px; cursor: pointer; padding: 6px 12px;">清空錯題本</button>
+        </div>
+        <div id="mistakeTableContainer"></div>
+    </div>
+</div>
+
+<!-- 優先引入獨立的單字資料庫檔案 -->
+<script src="liveABC.js"></script>
+
+<!-- 主系統邏輯 -->
+<script>
+
+// 發音功能的 JavaScript 程式碼
+function speakWord(wordText) {
+    if ('speechSynthesis' in window) {
+        // 停止先前正在唸的語音
+        window.speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(wordText);
+        utterance.lang = 'en-US'; // 設定美式英文發音
+        utterance.rate = 0.9;     // 語速稍微放慢一點，適合學習
+        window.speechSynthesis.speak(utterance);
+    } else {
+        alert('您的瀏覽器不支援語音朗讀功能');
+    }
+}
+
+
+// 全域狀態
+let mistakes = JSON.parse(localStorage.getItem('vocab_mistakes') || '[]');
+
+// 頁籤切換
+function switchTab(tabId) {
+    document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+    
+    if (tabId === 'cards') {
+        document.getElementById('cards-section').classList.add('active');
+        event.target.classList.add('active');
+        renderCards();
+    } else if (tabId === 'quiz') {
+        document.getElementById('quiz-section').classList.add('active');
+        event.target.classList.add('active');
+    } else if (tabId === 'mistakes') {
+        document.getElementById('mistakes-section').classList.add('active');
+        event.target.classList.add('active');
+        renderMistakes();
+    }
+}
+
+// 取得全部單字總集合
+function getAllWords() {
+    return [
+        ...magazine9WordsData,
+        // ...unit2WordsData,
+        // ...unit3WordsData,
+        // ...unit4WordsData,
+        // ...unit5WordsData
+    ];
+}
+
+// 取得目前選取的單字清單
+function getSelectedWords(unitVal) {
+if (unitVal === '1' || !unitVal) 
+    // 如果未來有多個單字包，可依 unitVal 進行判斷：
+    // if (unitVal === '2') return unit2WordsData;
+    // return getAllWords(); // 總複習
+    
+return magazine9WordsData;
+}
+    // if (unitVal === '1') return unit1WordsData;
+    // if (unitVal === '2') return unit2WordsData;
+    // if (unitVal === '3') return unit3WordsData;
+    // if (unitVal === '4') return unit4WordsData;
+    // if (unitVal === '5') return unit5WordsData;
+    // return getAllWords(); // 總複習
+
+
+// 1. 渲染名片（精準排版：單字與詞性靠左，音標旁緊跟發音按鈕）
+function renderCards() {
+    const unitVal = document.getElementById('cardUnitSelect') ? document.getElementById('cardUnitSelect').value : '1';
+    const words = getSelectedWords(unitVal);
+    const grid = document.getElementById('cardGrid');
+    document.getElementById('cardCountInfo').innerText = `共 ${words.length} 個單字`;
+    
+    grid.innerHTML = words.map(w => `
+        <div class="vocab-card">
+            <!-- 第一行：單字與詞性靠左並排 -->
+            <div class="word-row">
+                <span class="word">${w.vocab}</span>
+                
+                 <span class="kk">${w.kk || ''}</span>
+                <button class="speak-btn-inline" onclick="speakWord('${w.vocab}')" title="發音">🔊</button>
+            </div>
+            
+            <!-- 第二行：音標旁邊緊跟著小喇叭 -->
+            <div class="kk-row">
+             <span class="pos">${w.pos}</span>  
+                
+            </div>
+
+            <div class="def">${w.definition}</div>
+            ${w.extension ? `<div class="ext">${w.extension}</div>` : ''}
+        </div>
+    `).join('');
+}
+
+
+// 音效系統 (Web Audio API)
+function playSound(type) {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        if (type === 'correct') {
+            osc.frequency.setValueAtTime(587.33, now); // D5
+            osc.frequency.setValueAtTime(880, now + 0.1); // A5
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            osc.start(now);
+            osc.stop(now + 0.3);
+        } else {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.setValueAtTime(100, now + 0.15);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+            osc.start(now);
+            osc.stop(now + 0.4);
+        }
+    } catch (e) {
+        console.log("Audio not supported or blocked");
+    }
+}
+
+// 2. 測驗邏輯
+let quizList = [];
+let currentIdx = 0;
+let score = 0;
+let currentQuestionData = null;
+
+function startQuiz() {
+    const unitVal = document.getElementById('quizUnitSelect').value;
+    const typeVal = document.getElementById('quizTypeSelect').value;
+    const countVal = document.getElementById('quizCountSelect').value;
+    
+    let pool = getSelectedWords(unitVal);
+    if (pool.length < 4 && typeVal !== 'spell') {
+        alert("單字數量不足 4 個，無法產生選擇題選項！");
+        return;
+    }
+
+    
+
+    // 隨機打散全部單字
+    let shuffledPool = [...pool].sort(() => 0.5 - Math.random());
+
+    // 依照選擇的題數模式決定測驗清單
+    if (countVal === '10') {
+        quizList = shuffledPool.slice(0, Math.min(10, shuffledPool.length));
+    } else {
+        quizList = shuffledPool; // 全部隨機
+    }
+
+    currentIdx = 0;
+    score = 0;
+
+    document.getElementById('quizStartPrompt').style.display = 'none';
+    document.getElementById('quizContainer').style.display = 'block';
+    loadQuestion();
+}
+
+
+
+
+function loadQuestion() {
+    if (currentIdx >= quizList.length) {
+        // 測驗結束時，直接重新呼叫 startQuiz() 即可實現「再做一次」！
+        // 如果你想顯示分數，可以用一個專門的結算區塊，或是簡單用 confirm / alert，再不然就這樣寫：
+        const quizContainer = document.getElementById('quizContainer');
+        quizContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px;" id="quizResultScreen">
+                <h2>🎉 測驗結束！</h2>
+                <p style="font-size: 1.5rem; margin: 20px 0;">您的最終得分：<strong>${score} / ${quizList.length}</strong></p>
+                <button class="btn-primary" onclick="location.reload()">回首頁</button>
+                <button class="btn-primary" id="retryBtn">再做一次</button>
+            </div>
+        `;
+        
+        // 用 JavaScript 綁定事件監聽器，避開內聯 onclick 抓不到環境的問題
+        document.getElementById('retryBtn').addEventListener('click', function() {
+            startQuiz();
+        });
+        return;
+    }
+    
+    // ... 後續原本載入題目的程式碼保持不變 ...
+
+    currentQuestionData = quizList[currentIdx];
+    document.getElementById('quizProgress').innerText = `第 ${currentIdx + 1} 題 / 共 ${quizList.length} 題`;
+    document.getElementById('quizScore').innerText = `得分：${score}`;
+    document.getElementById('quizFeedback').innerText = '';
+    document.getElementById('nextBtn').style.display = 'none';
+
+    const typeVal = document.getElementById('quizTypeSelect').value;
+    const choiceContainer = document.getElementById('choiceContainer');
+    const spellContainer = document.getElementById('spellContainer');
+
+    if (typeVal === 'en2ch') {
+        choiceContainer.style.display = 'grid';
+        spellContainer.style.display = 'none';
+        document.getElementById('quizQuestionText').innerText = `請問 "${currentQuestionData.vocab}" 的意思為何？`;
+        
+        let options = [currentQuestionData.definition];
+        let otherPool = getAllWords().filter(w => w.vocab !== currentQuestionData.vocab);
+        while (options.length < 4 && otherPool.length > 0) {
+            let randWord = otherPool.splice(Math.floor(Math.random() * otherPool.length), 1)[0];
+            if (!options.includes(randWord.definition)) options.push(randWord.definition);
+        }
+        options.sort(() => 0.5 - Math.random());
+
+        choiceContainer.innerHTML = options.map(opt => `
+            <button class="option-btn" onclick="checkChoiceAnswer('${opt.replace(/'/g, "\\'")}')">${opt}</button>
+        `).join('');
+
+    } else if (typeVal === 'ch2en') {
+        choiceContainer.style.display = 'grid';
+        spellContainer.style.display = 'none';
+        document.getElementById('quizQuestionText').innerText = `下列何者代表 "${currentQuestionData.definition}"？`;
+        
+        let options = [currentQuestionData.vocab];
+        let otherPool = getAllWords().filter(w => w.vocab !== currentQuestionData.vocab);
+        while (options.length < 4 && otherPool.length > 0) {
+            let randWord = otherPool.splice(Math.floor(Math.random() * otherPool.length), 1)[0];
+            if (!options.includes(randWord.vocab)) options.push(randWord.vocab);
+        }
+        options.sort(() => 0.5 - Math.random());
+
+        choiceContainer.innerHTML = options.map(opt => `
+            <button class="option-btn" onclick="checkChoiceAnswer('${opt}')">${opt}</button>
+        `).join('');
+
+    } else if (typeVal === 'spell') {
+        choiceContainer.style.display = 'none';
+        spellContainer.style.display = 'block';
+        document.getElementById('quizQuestionText').innerText = `請拼出符合以下定義的單字：\n【${currentQuestionData.definition}】`;
+        document.getElementById('spellInput').value = '';
+        document.getElementById('spellInput').focus();
+    }
+}
+
+function checkChoiceAnswer(selected) {
+    const typeVal = document.getElementById('quizTypeSelect').value;
+    // 根據題型決定正確答案是英文單字還是中文定義
+    const targetVal = (typeVal === 'ch2en' ? currentQuestionData.vocab : currentQuestionData.definition).trim();
+    
+    const isCorrect = (selected.trim() === targetVal);
+    const fb = document.getElementById('quizFeedback');
+    
+    // 禁用所有選項按鈕，防止重複點擊
+    const buttons = document.querySelectorAll('.option-btn');
+    buttons.forEach(btn => {
+        btn.disabled = true;
+        const btnText = btn.innerText.trim();
+        
+        if (btnText === targetVal || btnText.includes(targetVal)) {
+            btn.classList.add('correct-answer');
+        } else if (btnText === selected.trim() || btnText.includes(selected.trim())) {
+            btn.classList.add('wrong-answer');
+        }
+    });
+
+    if (isCorrect) {
+        score++;
+        fb.innerText = '答對了！太棒了！';
+        fb.className = 'feedback correct';
+        playSound('correct');
+    } else {
+        fb.innerText = `答錯了！正確答案是：${currentQuestionData.vocab} (${currentQuestionData.definition})`;
+        fb.className = 'feedback incorrect';
+        playSound('incorrect');
+        addMistake(currentQuestionData);
+    }
+
+    document.getElementById('quizScore').innerText = `得分：${score}`;
+    document.getElementById('nextBtn').style.display = 'inline-block';
+}
+
+function submitSpellAnswer() {
+    const userVal = document.getElementById('spellInput').value.trim().toLowerCase();
+    const isCorrect = (userVal === currentQuestionData.vocab.toLowerCase());
+    handleAnswerResult(isCorrect);
+}
+
+function handleAnswerResult(isCorrect) {
+    const fb = document.getElementById('quizFeedback');
+    document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+
+    if (isCorrect) {
+        score++;
+        fb.innerText = '答對了！太棒了！';
+        fb.className = 'feedback correct';
+        playSound('correct');
+    } else {
+        fb.innerText = `答錯了！正確答案是：${currentQuestionData.vocab} (${currentQuestionData.definition})`;
+        fb.className = 'feedback incorrect';
+        playSound('incorrect');
+        addMistake(currentQuestionData);
+    }
+
+    document.getElementById('quizScore').innerText = `得分：${score}`;
+    document.getElementById('nextBtn').style.display = 'inline-block';
+}
+
+function nextQuestion() {
+    currentIdx++;
+    loadQuestion();
+}
+
+// 3. 錯題本管理
+function addMistake(wordObj) {
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    
+    mistakes = mistakes.filter(m => m.vocab !== wordObj.vocab);
+    mistakes.unshift({ ...wordObj, timestamp });
+    
+    localStorage.setItem('vocab_mistakes', JSON.stringify(mistakes));
+    updateMistakeCount();
+}
+
+function updateMistakeCount() {
+    document.getElementById('mistakeCount').innerText = mistakes.length;
+}
+
+function renderMistakes() {
+    const container = document.getElementById('mistakeTableContainer');
+    updateMistakeCount();
+
+    if (mistakes.length === 0) {
+        container.innerHTML = `<div class="empty-msg">太棒了！目前沒有錯題紀錄。</div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>單字</th>
+                    <th>KK / 詞性</th>
+                    <th>中文定義</th>
+                    <th>錯題時間</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${mistakes.map(m => `
+                    <tr>
+                        <td><strong>${m.vocab}</strong></td>
+                        <td>${m.kk}<br><span style="font-size:0.75rem; color:#6b7280">${m.pos}</span></td>
+                        <td>${m.definition}</td>
+                        <td class="timestamp">${m.timestamp}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function clearMistakes() {
+    if (confirm("確定要清空所有錯題紀錄嗎？")) {
+        mistakes = [];
+        localStorage.removeItem('vocab_mistakes');
+        renderMistakes();
+    }
+}
+
+// 初始化
+updateMistakeCount();
+renderCards();
+</script>
+
+</body>
+</html>
