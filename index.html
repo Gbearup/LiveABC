@@ -4,21 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LiveABC英文雜誌 單字複習與測驗</title>
-    <!-- 引入獨立的 CSS 樣式檔 -->
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
+
+<header>
+        <div class="header-container">
+             
+            <h1><img src="dacningcat.gif" alt="測驗圖示" class="small-icon">LiveABC英文雜誌 單字複習與測驗</h1>                  
+                        
+            <div class="nav-tabs">
+                 <button class="nav-btn active" onclick="switchTab('cards')">單字名片</button>
+                 <button class="nav-btn" onclick="switchTab('quiz')">字彙測驗</button>
+                 <button class="nav-btn" onclick="switchTab('mistakes')">錯題本 (<span id="mistakeCount">0</span>)</button>
+            </div>
+        </div>
+</header>
+
+
+<main>
+
+
+
 <div class="container">
-    <h1>📚 LiveABC英文雜誌 單字複習與測驗</h1>
-
-    <!-- 導覽頁籤 -->
-    <div class="nav-tabs">
-        <button class="nav-btn active" onclick="switchTab('cards')">單字名片</button>
-        <button class="nav-btn" onclick="switchTab('quiz')">字彙測驗</button>
-        <button class="nav-btn" onclick="switchTab('mistakes')">錯題本 (<span id="mistakeCount">0</span>)</button>
-    </div>
-
     <!-- 1. 單字名片區 -->
     <div id="cards-section" class="section active">
         <div class="controls">
@@ -74,10 +84,11 @@
             <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-weight: 600; color: #4b5563;">
                 <span id="quizProgress">第 1 題 / 共 10 題</span>
                 <span id="quizScore">得分：0</span>
+
             </div>
             <div class="quiz-box">
                 <div class="quiz-question" id="quizQuestionText">Question</div>
-                
+                               
                 <!-- 選擇題選項 -->
                 <div id="choiceContainer" class="options-grid"></div>
 
@@ -337,7 +348,7 @@ function loadQuestion() {
     if (typeVal === 'en2ch') {
         choiceContainer.style.display = 'grid';
         spellContainer.style.display = 'none';
-        document.getElementById('quizQuestionText').innerText = `請問 "${currentQuestionData.vocab}" 的意思為何？`;
+        document.getElementById('quizQuestionText').innerText = `請選出"${currentQuestionData.vocab}"的意思`;
         
         let options = [currentQuestionData.definition];
         let otherPool = getAllWords().filter(w => w.vocab !== currentQuestionData.vocab);
@@ -354,7 +365,7 @@ function loadQuestion() {
     } else if (typeVal === 'ch2en') {
         choiceContainer.style.display = 'grid';
         spellContainer.style.display = 'none';
-        document.getElementById('quizQuestionText').innerText = `下列何者代表 "${currentQuestionData.definition}"？`;
+        document.getElementById('quizQuestionText').innerText = `請選出"${currentQuestionData.definition}"的意思`;
         
         let options = [currentQuestionData.vocab];
         let otherPool = getAllWords().filter(w => w.vocab !== currentQuestionData.vocab);
@@ -505,7 +516,33 @@ function clearMistakes() {
 // 初始化
 updateMistakeCount();
 renderCards();
+
+
+// 監聽整個網頁的鍵盤按下事件
+document.addEventListener('keydown', function(event) {
+    // 1. 檢查按下的按鍵是不是 Enter
+    if (event.key === 'Enter') {
+        
+        // 2. 抓取你的下一題按鈕
+        const nextBtn = document.getElementById('nextBtn');
+        
+        // 3. 安全檢查：確保按鈕存在，且目前不是隱藏狀態 (display 不等於 none)
+        if (nextBtn && nextBtn.style.display !== 'none') {
+            
+            // 🌟 阻止 Enter 的網頁預設行為（例如表單自動送出或換行）
+            event.preventDefault(); 
+            
+            // 🌟 自動模擬點擊按鈕，直接執行 nextQuestion()
+            nextBtn.click(); 
+        }
+    }
+});
+
+
+
+
 </script>
+
 
 </body>
 </html>
